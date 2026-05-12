@@ -62,8 +62,12 @@ export default function App() {
     h.name.toLowerCase().includes(search.toLowerCase()) ||
     h.location.toLowerCase().includes(search.toLowerCase());
 
-  const withTravel = sortByDate(allHackathons.filter((h) => h.travel_reimbursement && matches(h)));
-  const withoutTravel = sortByDate(allHackathons.filter((h) => !h.travel_reimbursement && !h.skipped && matches(h)));
+  const now = new Date();
+  const todayNum = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
+
+  const upcomingWithTravel = sortByDate(allHackathons.filter((h) => h.travel_reimbursement && matches(h) && parseDateNum(h.date_str) >= todayNum));
+  const upcomingOther = sortByDate(allHackathons.filter((h) => !h.travel_reimbursement && !h.skipped && matches(h) && parseDateNum(h.date_str) >= todayNum));
+  const pastWithTravel = sortByDate(allHackathons.filter((h) => h.travel_reimbursement && matches(h) && parseDateNum(h.date_str) < todayNum));
 
   return (
     <div className="container">
@@ -96,27 +100,38 @@ export default function App() {
       {!loading && (
         <>
           <section>
-            <h3 className="section-title">Travel Reimbursement Available</h3>
-            {withTravel.length === 0 ? (
+            <h3 className="section-title">Upcoming — Travel Reimbursement Available</h3>
+            {upcomingWithTravel.length === 0 ? (
               <p className="empty">
                 {stats && stats.total === 0
                   ? "The daily scrape hasn't run yet — check back soon."
-                  : "No hackathons with travel reimbursement found yet. Check back as more are added to the season."}
+                  : "No upcoming hackathons with travel reimbursement found yet."}
               </p>
             ) : (
               <div className="grid">
-                {withTravel.map((h) => (
+                {upcomingWithTravel.map((h) => (
                   <HackathonCard key={h.id} h={h} highlight={true} />
                 ))}
               </div>
             )}
           </section>
 
-          {withoutTravel.length > 0 && (
-            <section className="section-dim">
-              <h3 className="section-title dim">Other MLH Hackathons</h3>
+          {pastWithTravel.length > 0 && (
+            <section>
+              <h3 className="section-title">Past — Travel Reimbursement Offered</h3>
               <div className="grid">
-                {withoutTravel.map((h) => (
+                {pastWithTravel.map((h) => (
+                  <HackathonCard key={h.id} h={h} highlight={true} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {upcomingOther.length > 0 && (
+            <section className="section-dim">
+              <h3 className="section-title dim">Upcoming — Other MLH Hackathons</h3>
+              <div className="grid">
+                {upcomingOther.map((h) => (
                   <HackathonCard key={h.id} h={h} highlight={false} />
                 ))}
               </div>
