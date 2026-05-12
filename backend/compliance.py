@@ -20,19 +20,47 @@ def _base_url(url: str) -> str:
 
 def check_robots(base_url: str) -> tuple[bool, str]:
     robots_url = urljoin(base_url, "/robots.txt")
-    rp = RobotFileParser()
-    rp.set_url(robots_url)
     try:
-        rp.read()
-        # Check against wildcard agent — only block if the site explicitly
-        # disallows all crawlers from the root path
-        allowed = rp.can_fetch("*", base_url)
-        if not allowed:
-            return False, "robots.txt disallows all crawlers from root"
-        return True, "robots.txt allows access"
+        r = httpx.get(robots_url, timeout=TIMEOUT, follow_redirects=True,
+                      headers={"User-Agent": "Mozilla/5.0"})
+
+        content_type = r.headers.get("content-type", "")
+        body = r.text.strip()
+
+        # Server returned an HTML page instead of a real robots.txt — no restrictions
+        if "text/html" in content_type or body.startswith("<!"):
+            return True, "No robots.txt found (server returned HTML) — assuming allowed"
+
+        # AI content signals format — parse ai-input signal specifically
+        if "content-signal" in body.lower() or "ai-input" in body.lower():
+            for line in body.splitlines():
+                stripped = line.strip().lower()
+                if stripped.startswith("ai-input:"):
+                    value = stripped.split(":", 1)[1].strip()
+                    if value == "no":
+                        return False, "robots.txt AI content signal explicitly disallows ai-input"
+                    if value == "yes":
+                        return True, "robots.txt AI content signal explicitly allows ai-input"
+            # No explicit ai-input signal — neither grants nor restricts (per the format spec)
+            return True, "robots.txt AI content signals file — no ai-input restriction found"
+
+        # Standard robots.txt — hybrid check: our bot name + wildcard
+        rp = RobotFileParser()
+        rp.set_url(robots_url)
+        rp.parse(body.splitlines())
+
+        bot_allowed = rp.can_fetch("HackathonFinder-Bot", base_url)
+        wildcard_allowed = rp.can_fetch("*", base_url)
+
+        if not bot_allowed and not wildcard_allowed:
+            return False, "robots.txt disallows both our bot and all crawlers from root"
+        if not bot_allowed:
+            return False, "robots.txt explicitly disallows HackathonFinder-Bot from root"
+        if not wildcard_allowed:
+            return True, "robots.txt disallows wildcard but no specific rule blocks our bot — allowed"
+        return True, "robots.txt allows access (bot and wildcard both permitted)"
     except Exception:
-        # If robots.txt is unreachable, assume allowed (common for small hackathon sites)
-        return True, "robots.txt not found — assuming allowed"
+        return True, "robots.txt unreachable — assuming allowed"
 
 
 def _find_tos_url(base_url: str) -> str | None:
