@@ -38,42 +38,36 @@ def get_mlh_hackathons() -> list[dict]:
         return []
 
     # MLH embeds event data as HTML-entity encoded JSON in the raw HTML.
-    # We find it by locating the "websiteUrl" key and extracting the full JSON array.
-    page_text = r.text
-    decoded = html.unescape(page_text)
+    # There are two separate JSON arrays: upcoming and past events. Parse both.
+    decoded = html.unescape(r.text)
 
-    # Find all event objects by extracting the JSON array containing websiteUrl fields
-    # The pattern: find a JSON array of objects with "websiteUrl" and "name" fields
-    matches = re.findall(
-        r'\{"id":"[0-9a-f\-]+".*?"websiteUrl":"(https?://[^"]+)".*?\}',
-        decoded,
-    )
+    def extract_array(text, start_pos):
+        depth = 0
+        for i, ch in enumerate(text[start_pos:], start=start_pos):
+            if ch == '[': depth += 1
+            elif ch == ']':
+                depth -= 1
+                if depth == 0:
+                    try: return json.loads(text[start_pos:i+1]), i
+                    except json.JSONDecodeError: return [], i
+        return [], len(text)
 
-    # Better approach: find the whole JSON blob and parse it
-    # Look for the array start before the first event id
-    idx = decoded.find('"websiteUrl"')
-    if idx == -1:
+    events_data, search_from = [], 0
+    while True:
+        idx = decoded.find('"websiteUrl"', search_from)
+        if idx == -1:
+            break
+        array_start = decoded.rfind('[', search_from, idx)
+        if array_start == -1 or array_start < search_from:
+            search_from = idx + 1
+            continue
+        arr, end_pos = extract_array(decoded, array_start)
+        if arr:
+            events_data.extend(arr)
+        search_from = end_pos + 1
+
+    if not events_data:
         print("[scraper] Could not find event data in MLH page")
-        return []
-
-    # Walk back to find the opening [ of the events array
-    array_start = decoded.rfind('[', 0, idx)
-    # Walk forward to find the closing ] — find matching bracket
-    depth = 0
-    array_end = array_start
-    for i, ch in enumerate(decoded[array_start:], start=array_start):
-        if ch == '[':
-            depth += 1
-        elif ch == ']':
-            depth -= 1
-            if depth == 0:
-                array_end = i
-                break
-
-    try:
-        events_data = json.loads(decoded[array_start:array_end + 1])
-    except json.JSONDecodeError as e:
-        print(f"[scraper] Failed to parse events JSON: {e}")
         return []
 
     hackathons = []
@@ -88,6 +82,7 @@ def get_mlh_hackathons() -> list[dict]:
             # Skip digital/online-only events
             if event.get("formatType") == "digital":
                 continue
+            # Keep ended events — page is already season-scoped so all belong to 2026
 
             mlh_event_path = event.get("url", "")
             hackathons.append({
