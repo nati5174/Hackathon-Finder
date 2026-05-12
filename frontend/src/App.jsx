@@ -1,5 +1,27 @@
 import { useEffect, useState } from "react";
 
+const MONTHS = { JAN:1,FEB:2,MAR:3,APR:4,MAY:5,JUN:6,JUL:7,AUG:8,SEP:9,OCT:10,NOV:11,DEC:12 };
+
+function parseDateNum(dateStr) {
+  const match = (dateStr || "").match(/([A-Z]+)\s+(\d+)/);
+  if (!match) return 0;
+  const month = MONTHS[match[1]] || 0;
+  const day = parseInt(match[2]);
+  // MLH 2026 season: JUL–DEC are 2025, JAN–JUN are 2026
+  const year = month >= 7 ? 2025 : 2026;
+  return year * 10000 + month * 100 + day;
+}
+
+function sortByDate(hackathons) {
+  const now = new Date();
+  const todayNum = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
+  const upcoming = hackathons.filter(h => parseDateNum(h.date_str) >= todayNum)
+    .sort((a, b) => parseDateNum(a.date_str) - parseDateNum(b.date_str));
+  const past = hackathons.filter(h => parseDateNum(h.date_str) < todayNum)
+    .sort((a, b) => parseDateNum(b.date_str) - parseDateNum(a.date_str));
+  return [...upcoming, ...past];
+}
+
 function HackathonCard({ h, highlight }) {
   return (
     <a
@@ -40,8 +62,8 @@ export default function App() {
     h.name.toLowerCase().includes(search.toLowerCase()) ||
     h.location.toLowerCase().includes(search.toLowerCase());
 
-  const withTravel = allHackathons.filter((h) => h.travel_reimbursement && matches(h));
-  const withoutTravel = allHackathons.filter((h) => !h.travel_reimbursement && !h.skipped && matches(h));
+  const withTravel = sortByDate(allHackathons.filter((h) => h.travel_reimbursement && matches(h)));
+  const withoutTravel = sortByDate(allHackathons.filter((h) => !h.travel_reimbursement && !h.skipped && matches(h)));
 
   return (
     <div className="container">

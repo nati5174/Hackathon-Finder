@@ -38,10 +38,15 @@ def process_hackathon(h: dict) -> dict:
                 "compliance_ok": False, "compliance_notes": notes,
                 "travel_reimbursement": False, "travel_details": None}
 
-    # Scrape
+    # Scrape with Playwright
     content = ""
     try:
-        content = scrape_hackathon_site(url)
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36")
+            content = scrape_hackathon_site(url, browser_page=page)
+            browser.close()
     except Exception as e:
         print(f"[scheduler] Scrape error {name}: {e}")
 
@@ -88,22 +93,25 @@ def run():
                 result = future.result()
                 results.append(result)
                 # Write immediately so the UI updates in real-time
-                with Session(engine) as session:
-                    session.add(Hackathon(
-                        name=result["name"],
-                        hackathon_url=result["hackathon_url"],
-                        mlh_url=result["mlh_url"],
-                        location=result["location"],
-                        date_str=result["date_str"],
-                        compliance_ok=result["compliance_ok"],
-                        compliance_notes=result["compliance_notes"],
-                        skipped=result["skipped"],
-                        skip_reason=result["skip_reason"],
-                        travel_reimbursement=result["travel_reimbursement"],
-                        travel_details=result["travel_details"],
-                        last_checked=datetime.utcnow(),
-                    ))
-                    session.commit()
+                try:
+                    with Session(engine) as session:
+                        session.add(Hackathon(
+                            name=result["name"],
+                            hackathon_url=result["hackathon_url"],
+                            mlh_url=result["mlh_url"],
+                            location=result["location"],
+                            date_str=result["date_str"],
+                            compliance_ok=result["compliance_ok"],
+                            compliance_notes=result["compliance_notes"],
+                            skipped=result["skipped"],
+                            skip_reason=result["skip_reason"],
+                            travel_reimbursement=result["travel_reimbursement"],
+                            travel_details=result["travel_details"],
+                            last_checked=datetime.utcnow(),
+                        ))
+                        session.commit()
+                except Exception as db_err:
+                    print(f"[scheduler] Skipping duplicate: {result['name']} ({db_err})")
             except Exception as e:
                 h = futures[future]
                 print(f"[scheduler] Worker error for {h['name']}: {e}")

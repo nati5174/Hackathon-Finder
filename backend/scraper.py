@@ -13,10 +13,10 @@ from urllib.parse import urljoin
 
 HEADERS = {"User-Agent": "HackathonFinder-Bot/1.0 (educational tool; not for commercial use)"}
 TIMEOUT = 15
-REQUEST_DELAY = 2  # seconds between requests — be polite
+BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36"
 
-# Pages on each hackathon site that might mention travel reimbursement
-TRAVEL_HINT_PATHS = ["/", "/travel", "/faq", "/about", "/info", "/attend"]
+# Only check the two pages most likely to mention travel reimbursement
+TRAVEL_HINT_PATHS = ["/", "/travel"]
 
 
 def get_mlh_hackathons() -> list[dict]:
@@ -100,30 +100,62 @@ def get_mlh_hackathons() -> list[dict]:
     return hackathons
 
 
-def scrape_hackathon_site(url: str) -> str:
+def _fetch_page_text(url: str, page) -> str:
+    """Fetch a single page with Playwright and return visible text."""
+    try:
+        page.goto(url, timeout=12000, wait_until="domcontentloaded")
+        page.wait_for_timeout(1000)
+
+        # Scroll to bottom so lazy-loaded sections render
+        page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        page.wait_for_timeout(500)
+
+        # Click any FAQ accordion items mentioning travel so content expands
+        try:
+            els = page.locator("button, summary, [role='button'], dt, .faq-question, .accordion").all()
+            for el in els:
+                try:
+                    if any(k in el.inner_text(timeout=500).lower() for k in ["travel", "reimburse", "stipend"]):
+                        el.click(timeout=500)
+                        page.wait_for_timeout(300)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        soup = BeautifulSoup(page.content(), "html.parser")
+        for tag in soup(["script", "style", "nav", "footer"]):
+            tag.decompose()
+        return soup.get_text(separator=" ", strip=True)
+    except Exception:
+        return ""
+
+
+def scrape_hackathon_site(url: str, browser_page=None) -> str:
     """
-    Fetches text content from a hackathon's website.
-    Tries the homepage plus travel/faq/about pages.
-    Returns combined plain text (capped to avoid huge Claude costs).
+    Fetches text from a hackathon site using Playwright (handles JS-rendered sites).
+    Pass an existing browser_page to reuse across calls (faster).
+    If none is passed, opens its own browser instance.
     """
     from urllib.parse import urlparse
+    from playwright.sync_api import sync_playwright
+
     base = f"{urlparse(url).scheme}://{urlparse(url).netloc}"
     combined_text = []
 
-    for path in TRAVEL_HINT_PATHS:
-        target = urljoin(base, path)
-        try:
-            r = httpx.get(target, headers=HEADERS, timeout=TIMEOUT, follow_redirects=True)
-            if r.status_code != 200:
-                continue
-            soup = BeautifulSoup(r.text, "html.parser")
-            # Strip scripts/styles
-            for tag in soup(["script", "style", "nav", "footer"]):
-                tag.decompose()
-            text = soup.get_text(separator=" ", strip=True)
-            combined_text.append(f"[Page: {path}]\n{text[:3000]}")
-            time.sleep(REQUEST_DELAY)
-        except Exception:
-            continue
+    def _scrape(page):
+        for path in TRAVEL_HINT_PATHS:
+            text = _fetch_page_text(urljoin(base, path), page)
+            if text:
+                combined_text.append(f"[Page: {path}]\n{text[:8000]}")
 
-    return "\n\n".join(combined_text)[:12000]  # cap total to ~12k chars
+    if browser_page is not None:
+        _scrape(browser_page)
+    else:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page(user_agent=BROWSER_UA)
+            _scrape(page)
+            browser.close()
+
+    return "\n\n".join(combined_text)[:12000]

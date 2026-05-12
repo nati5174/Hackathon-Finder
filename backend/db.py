@@ -10,7 +10,7 @@ engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 class Hackathon(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
-    hackathon_url: str          # the hackathon's own website
+    hackathon_url: str = Field(unique=True)  # the hackathon's own website
     mlh_url: str                # the MLH listing page
     location: str
     date_str: str
