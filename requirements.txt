@@ -1,0 +1,9 @@
+httpx
+beautifulsoup4
+anthropic
+fastapi
+uvicorn[standard]
+sqlmodel
+python-dotenv
+apscheduler
+playwright
