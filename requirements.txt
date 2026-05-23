@@ -1,4 +1,5 @@
 httpx
+psycopg2-binary
 beautifulsoup4
 anthropic
 fastapi

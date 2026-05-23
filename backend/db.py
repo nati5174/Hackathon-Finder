@@ -3,8 +3,10 @@ from typing import Optional
 from datetime import datetime
 from sqlmodel import SQLModel, Field, create_engine, Session
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./hackathons.db")
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL env var is not set")
+engine = create_engine(DATABASE_URL)
 
 
 class Hackathon(SQLModel, table=True):
