@@ -21,28 +21,45 @@ from backend.compliance import is_scraping_allowed
 from backend.detector import detect_travel_reimbursement
 
 WORKERS = 10
+RECHECK_DAYS = 7
 
 
 def _save_result(result: dict):
     try:
         with Session(engine) as session:
-            session.add(Hackathon(
-                name=result["name"],
-                hackathon_url=result["hackathon_url"],
-                mlh_url=result["mlh_url"],
-                location=result["location"],
-                date_str=result["date_str"],
-                compliance_ok=result["compliance_ok"],
-                compliance_notes=result["compliance_notes"],
-                skipped=result["skipped"],
-                skip_reason=result["skip_reason"],
-                travel_reimbursement=result["travel_reimbursement"],
-                travel_details=result["travel_details"],
-                last_checked=datetime.utcnow(),
-            ))
+            existing = session.exec(
+                select(Hackathon).where(Hackathon.hackathon_url == result["hackathon_url"])
+            ).first()
+            if existing:
+                existing.name = result["name"]
+                existing.location = result["location"]
+                existing.date_str = result["date_str"]
+                existing.compliance_ok = result["compliance_ok"]
+                existing.compliance_notes = result["compliance_notes"]
+                existing.skipped = result["skipped"]
+                existing.skip_reason = result["skip_reason"]
+                existing.travel_reimbursement = result["travel_reimbursement"]
+                existing.travel_details = result["travel_details"]
+                existing.last_checked = datetime.utcnow()
+                session.add(existing)
+            else:
+                session.add(Hackathon(
+                    name=result["name"],
+                    hackathon_url=result["hackathon_url"],
+                    mlh_url=result["mlh_url"],
+                    location=result["location"],
+                    date_str=result["date_str"],
+                    compliance_ok=result["compliance_ok"],
+                    compliance_notes=result["compliance_notes"],
+                    skipped=result["skipped"],
+                    skip_reason=result["skip_reason"],
+                    travel_reimbursement=result["travel_reimbursement"],
+                    travel_details=result["travel_details"],
+                    last_checked=datetime.utcnow(),
+                ))
             session.commit()
     except Exception as db_err:
-        print(f"[scheduler] Skipping duplicate: {result['name']} ({db_err})")
+        print(f"[scheduler] DB error for {result['name']}: {db_err}")
 
 
 def process_hackathon(h: dict, browser) -> dict:
@@ -123,14 +140,15 @@ def run():
         return
 
     with Session(engine) as session:
-        existing_urls = set(
+        recently_checked = set(
             row.hackathon_url for row in session.exec(select(Hackathon)).all()
+            if (datetime.utcnow() - row.last_checked).days < RECHECK_DAYS
         )
 
-    to_process = [h for h in hackathons if h["hackathon_url"] not in existing_urls]
+    to_process = [h for h in hackathons if h["hackathon_url"] not in recently_checked]
     skipped_count = len(hackathons) - len(to_process)
     if skipped_count:
-        print(f"[scheduler] Skipping {skipped_count} already in DB")
+        print(f"[scheduler] Skipping {skipped_count} checked within last {RECHECK_DAYS} days")
 
     n_workers = min(WORKERS, len(to_process))
     print(f"[scheduler] Processing {len(to_process)} hackathons with {n_workers} workers")
@@ -161,6 +179,34 @@ def run():
 
     yes_count = sum(1 for r in results if r.get("travel_reimbursement"))
     print(f"\n[scheduler] Done. {yes_count}/{len(results)} hackathons offer travel reimbursement.")
+
+
+def recheck_hackathon(hackathon_id: int) -> dict | None:
+    """Re-scrape and re-classify a single hackathon by DB id, updating the record."""
+    from playwright.sync_api import sync_playwright
+
+    with Session(engine) as session:
+        h = session.get(Hackathon, hackathon_id)
+        if not h:
+            return None
+        h_dict = {
+            "name": h.name,
+            "hackathon_url": h.hackathon_url,
+            "mlh_url": h.mlh_url,
+            "location": h.location,
+            "date_str": h.date_str,
+        }
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        try:
+            result = process_hackathon(h_dict, browser)
+        finally:
+            browser.close()
+
+    _save_result(result)
+    print(f"[scheduler] Rechecked: {h_dict['name']} — travel={'YES' if result['travel_reimbursement'] else 'NO'}")
+    return result
 
 
 if __name__ == "__main__":

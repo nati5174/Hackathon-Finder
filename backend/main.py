@@ -1,18 +1,19 @@
 import os
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from sqlmodel import Session, select
 
 from backend.db import engine, init_db, Hackathon
+from backend.scheduler import recheck_hackathon
 
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -53,6 +54,15 @@ def get_stats():
             "skipped_compliance": skipped,
             "last_updated": last_checked,
         }
+
+
+@app.post("/api/admin/recheck/{hackathon_id}")
+def admin_recheck(hackathon_id: int):
+    """Force re-scrape and re-classify a single hackathon by id."""
+    result = recheck_hackathon(hackathon_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Hackathon not found")
+    return result
 
 
 # Serve React frontend in production
