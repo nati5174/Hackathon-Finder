@@ -10,7 +10,7 @@ import os
 
 HEADERS = {"User-Agent": "HackathonFinder-Bot/1.0 (educational tool; not for commercial use)"}
 TOS_PATHS = ["/terms", "/terms-of-service", "/tos", "/legal", "/privacy-policy"]
-TIMEOUT = 10
+TIMEOUT = 4
 
 
 def _base_url(url: str) -> str:
@@ -64,15 +64,25 @@ def check_robots(base_url: str) -> tuple[bool, str]:
 
 
 def _find_tos_url(base_url: str) -> str | None:
-    # Try common ToS paths directly
-    for path in TOS_PATHS:
+    from concurrent.futures import ThreadPoolExecutor, as_completed as cf_completed
+
+    def try_path(path):
         url = urljoin(base_url, path)
         try:
             r = httpx.get(url, headers=HEADERS, timeout=TIMEOUT, follow_redirects=True)
             if r.status_code == 200 and len(r.text) > 200:
                 return url
         except Exception:
-            continue
+            pass
+        return None
+
+    # Probe all known ToS paths in parallel — return on first hit
+    with ThreadPoolExecutor(max_workers=len(TOS_PATHS)) as ex:
+        futures = {ex.submit(try_path, path): path for path in TOS_PATHS}
+        for future in cf_completed(futures):
+            result = future.result()
+            if result:
+                return result
 
     # Fall back: look for a ToS link in the homepage footer
     try:
@@ -124,10 +134,8 @@ def check_tos(base_url: str) -> tuple[bool, str]:
 
 def is_scraping_allowed(url: str) -> tuple[bool, str]:
     base = _base_url(url)
-
     robots_ok, robots_notes = check_robots(base)
     if not robots_ok:
         return False, robots_notes
-
     tos_ok, tos_notes = check_tos(base)
     return tos_ok, tos_notes

@@ -6,9 +6,29 @@ import os
 import anthropic
 
 
+TRAVEL_KEYWORDS = [
+    "travel reimbursement", "travel stipend", "travel grant", "travel support",
+    "travel assistance", "travel award", "travel funding", "travel subsidy",
+    "reimburse travel", "cover travel", "flight reimbursement", "bus reimbursement",
+    "transportation reimbursement", "travel scholarship", "travel allowance",
+    "travel expenses", "travel costs covered", "we cover", "we reimburse",
+    "travel voucher", "bus transportation", "chartered bus", "shuttle",
+    "travel help", "travel aid",
+]
+
+
+def _keyword_check(content: str) -> bool:
+    """Fast pre-check: if any travel keyword appears, likely YES."""
+    lower = content.lower()
+    return any(kw in lower for kw in TRAVEL_KEYWORDS)
+
+
 def detect_travel_reimbursement(hackathon_name: str, site_content: str) -> tuple[bool, str]:
     if not site_content.strip():
         return False, "Could not fetch hackathon website content"
+
+    # Fast path: keyword hit → still confirm with Claude for accurate details
+    keyword_hit = _keyword_check(site_content)
 
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
@@ -20,7 +40,13 @@ Here is the text content scraped from their website:
 
 ---
 
-Does this hackathon offer travel reimbursement, travel stipends, travel grants, or cover any travel costs for attendees (flights, bus, train, etc.)?
+Does this hackathon offer ANY form of travel support for attendees? This includes:
+- Travel reimbursement, stipends, grants, or scholarships
+- Covered flights, buses, trains, or shuttles
+- Transportation subsidies or vouchers
+- Any financial help for getting to the event
+
+Be generous in interpretation — if travel support is mentioned even conditionally or for select participants, answer YES.
 
 Answer in this exact format:
 VERDICT: YES or NO
@@ -29,15 +55,15 @@ DETAILS: One or two sentences summarizing what travel support is offered, or why
 
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
-        max_tokens=200,
+        max_tokens=250,
         messages=[{"role": "user", "content": prompt}],
     )
 
     response = message.content[0].text.strip()
     lines = response.splitlines()
 
-    verdict = False
-    details = response  # fallback
+    verdict = keyword_hit  # default to keyword result if parsing fails
+    details = response
 
     for line in lines:
         if line.startswith("VERDICT:"):
