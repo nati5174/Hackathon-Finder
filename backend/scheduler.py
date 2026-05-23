@@ -8,11 +8,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from sqlmodel import Session, select
-from urllib.parse import urlparse
 
 from backend.db import engine, init_db, Hackathon
 from backend.scraper import get_mlh_hackathons, scrape_hackathon_site
-from backend.compliance import check_robots
+from backend.compliance import is_scraping_allowed
 from backend.detector import detect_travel_reimbursement
 
 WORKERS = 5  # parallel hackathons
@@ -25,15 +24,14 @@ def process_hackathon(h: dict) -> dict:
     name = h["name"]
     url = h["hackathon_url"]
 
-    # robots.txt check
+    # compliance check (robots.txt + ToS)
     try:
-        base = f"{urlparse(url).scheme}://{urlparse(url).netloc}"
-        allowed, notes = check_robots(base)
+        allowed, notes = is_scraping_allowed(url)
     except Exception as e:
-        allowed, notes = True, f"robots.txt check failed: {e}"
+        allowed, notes = True, f"compliance check failed: {e}"
 
     if not allowed:
-        print(f"[scheduler] SKIPPED (robots.txt) {name} | {url} — {notes}")
+        print(f"[scheduler] SKIPPED (compliance) {name} | {url} — {notes}")
         return {**h, "skipped": True, "skip_reason": notes,
                 "compliance_ok": False, "compliance_notes": notes,
                 "travel_reimbursement": False, "travel_details": None}
