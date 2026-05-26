@@ -26,6 +26,26 @@ function sortByDate(hackathons, season) {
   return [...upcoming, ...past];
 }
 
+const US_STATES = new Set([
+  "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA",
+  "KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ",
+  "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT",
+  "VA","WA","WV","WI","WY","DC",
+  "Alabama","Alaska","Arizona","Arkansas","California","Colorado","Connecticut",
+  "Delaware","Florida","Georgia","Hawaii","Idaho","Illinois","Indiana","Iowa",
+  "Kansas","Kentucky","Louisiana","Maine","Maryland","Massachusetts","Michigan",
+  "Minnesota","Mississippi","Missouri","Montana","Nebraska","Nevada",
+  "New Hampshire","New Jersey","New Mexico","New York","North Carolina",
+  "North Dakota","Ohio","Oklahoma","Oregon","Pennsylvania","Rhode Island",
+  "South Carolina","South Dakota","Tennessee","Texas","Utah","Vermont",
+  "Virginia","Washington","West Virginia","Wisconsin","Wyoming",
+]);
+
+function isUS(location) {
+  if (!location) return false;
+  return location.split(/[\s,]+/).some((part) => US_STATES.has(part));
+}
+
 function HackathonCard({ h, highlight }) {
   return (
     <a
@@ -96,6 +116,9 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
+  const [travelOnly, setTravelOnly] = useState(false);
+  const [region, setRegion] = useState("all"); // "all" | "us" | "intl"
+  const [hidePast, setHidePast] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -111,17 +134,22 @@ export default function App() {
     });
   }, []);
 
-  const matches = (h) =>
-    h.name.toLowerCase().includes(search.toLowerCase()) ||
-    h.location.toLowerCase().includes(search.toLowerCase());
-
   const season = currentSeason();
   const now = new Date();
   const todayNum = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
 
-  const upcomingWithTravel = sortByDate(allHackathons.filter((h) => h.travel_reimbursement && matches(h) && parseDateNum(h.date_str, season) >= todayNum), season);
+  const matches = (h) => {
+    const q = search.toLowerCase();
+    if (q && !h.name.toLowerCase().includes(q) && !h.location.toLowerCase().includes(q)) return false;
+    if (travelOnly && !h.travel_reimbursement) return false;
+    if (region === "us" && !isUS(h.location)) return false;
+    if (region === "intl" && isUS(h.location)) return false;
+    return true;
+  };
+
+  const upcomingWithTravel = sortByDate(allHackathons.filter((h) => h.travel_reimbursement && !h.skipped && matches(h) && parseDateNum(h.date_str, season) >= todayNum), season);
   const upcomingOther = sortByDate(allHackathons.filter((h) => !h.travel_reimbursement && !h.skipped && matches(h) && parseDateNum(h.date_str, season) >= todayNum), season);
-  const pastWithTravel = sortByDate(allHackathons.filter((h) => h.travel_reimbursement && matches(h) && parseDateNum(h.date_str, season) < todayNum), season);
+  const pastWithTravel = sortByDate(allHackathons.filter((h) => h.travel_reimbursement && !h.skipped && matches(h) && parseDateNum(h.date_str, season) < todayNum), season);
 
   return (
     <div className="container">
@@ -152,6 +180,35 @@ export default function App() {
         onChange={(e) => setSearch(e.target.value)}
       />
 
+      <div className="filters">
+        <div className="filter-group">
+          <span className="filter-label">Region</span>
+          {["all", "us", "intl"].map((r) => (
+            <button
+              key={r}
+              className={`pill ${region === r ? "pill-active" : ""}`}
+              onClick={() => setRegion(r)}
+            >
+              {r === "all" ? "All" : r === "us" ? "US" : "International"}
+            </button>
+          ))}
+        </div>
+        <div className="filter-group">
+          <button
+            className={`pill ${travelOnly ? "pill-active" : ""}`}
+            onClick={() => setTravelOnly((v) => !v)}
+          >
+            Travel only
+          </button>
+          <button
+            className={`pill ${hidePast ? "pill-active" : ""}`}
+            onClick={() => setHidePast((v) => !v)}
+          >
+            Hide past
+          </button>
+        </div>
+      </div>
+
       {loading && <p className="loading">Loading hackathons...</p>}
       {error && <p className="loading">Error: {error}</p>}
 
@@ -174,7 +231,7 @@ export default function App() {
             )}
           </section>
 
-          {pastWithTravel.length > 0 && (
+          {!hidePast && pastWithTravel.length > 0 && (
             <section>
               <h3 className="section-title">Past — Travel Reimbursement Offered</h3>
               <div className="grid">
@@ -185,7 +242,7 @@ export default function App() {
             </section>
           )}
 
-          {upcomingOther.length > 0 && (
+          {!travelOnly && upcomingOther.length > 0 && (
             <section className="section-dim">
               <h3 className="section-title dim">Upcoming — Other MLH Hackathons</h3>
               <div className="grid">
