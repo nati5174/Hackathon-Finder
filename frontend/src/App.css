@@ -18,7 +18,15 @@ body {
 }
 
 header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 2rem;
   margin-bottom: 2rem;
+}
+
+.header-left {
+  flex: 1;
 }
 
 h1 {
@@ -36,6 +44,76 @@ h1 {
 .stats {
   color: #666;
   font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.subscribe-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+
+.subscribe-label {
+  font-size: 0.8rem;
+  color: #888;
+  text-align: right;
+}
+
+.subscribe-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.subscribe-form input[type="email"] {
+  padding: 0.55rem 0.9rem;
+  border-radius: 8px;
+  border: 1px solid #2a2a2a;
+  background: #1a1a1a;
+  color: #f0f0f0;
+  font-size: 0.9rem;
+  outline: none;
+  width: 240px;
+}
+
+.subscribe-form input[type="email"]:focus {
+  border-color: #555;
+}
+
+.subscribe-form button {
+  padding: 0.55rem 1.1rem;
+  border-radius: 8px;
+  border: 1px solid #2d5a2d;
+  background: #1a3a1a;
+  color: #4caf50;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.subscribe-form button:hover:not(:disabled) {
+  background: #22481e;
+}
+
+.subscribe-form button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.subscribe-msg {
+  width: 100%;
+  font-size: 0.85rem;
+  margin-top: 0.25rem;
+}
+
+.subscribe-msg.success {
+  color: #4caf50;
+}
+
+.subscribe-msg.error {
+  color: #e57373;
 }
 
 .search {

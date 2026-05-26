@@ -45,6 +45,51 @@ function HackathonCard({ h, highlight }) {
   );
 }
 
+function SubscribeForm() {
+  const [email, setEmail] = useState("");
+  const [status, setStatus] = useState(null); // null | "loading" | "success" | "error"
+  const [message, setMessage] = useState("");
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setStatus("loading");
+    try {
+      const res = await fetch("/api/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      setMessage(data.message);
+      setStatus("success");
+      setEmail("");
+    } catch {
+      setMessage("Something went wrong. Please try again.");
+      setStatus("error");
+    }
+  };
+
+  return (
+    <form className="subscribe-form" onSubmit={handleSubmit}>
+      <p className="subscribe-label">Get notified of new hackathons</p>
+      <div className="subscribe-row">
+        <input
+          type="email"
+          placeholder="your@email.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+          disabled={status === "loading"}
+        />
+        <button type="submit" disabled={status === "loading"}>
+          {status === "loading" ? "Sending..." : "Notify Me"}
+        </button>
+      </div>
+      {message && <p className={`subscribe-msg ${status}`}>{message}</p>}
+    </form>
+  );
+}
+
 export default function App() {
   const [allHackathons, setAllHackathons] = useState([]);
   const [stats, setStats] = useState(null);
@@ -81,19 +126,22 @@ export default function App() {
   return (
     <div className="container">
       <header>
-        <h1>Hackathon Travel Finder</h1>
-        <p className="subtitle">
-          Hackathons from MLH that cover your travel — fly for free.
-        </p>
-        {stats && (
-          <p className="stats">
-            {stats.with_travel_reimbursement} with travel reimbursement out of{" "}
-            {stats.total} checked &mdash; last updated{" "}
-            {stats.last_updated
-              ? new Date(stats.last_updated).toLocaleDateString()
-              : "never"}
+        <div className="header-left">
+          <h1>Hackathon Travel Finder</h1>
+          <p className="subtitle">
+            Hackathons from MLH that cover your travel — fly for free.
           </p>
-        )}
+          {stats && (
+            <p className="stats">
+              {stats.with_travel_reimbursement} with travel reimbursement out of{" "}
+              {stats.total} checked &mdash; last updated{" "}
+              {stats.last_updated
+                ? new Date(stats.last_updated).toLocaleDateString()
+                : "never"}
+            </p>
+          )}
+        </div>
+        <SubscribeForm />
       </header>
 
       <input

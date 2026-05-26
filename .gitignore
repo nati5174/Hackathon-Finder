@@ -17,3 +17,4 @@ dist/
 # Shell history
 .history
 *.history
+.claude

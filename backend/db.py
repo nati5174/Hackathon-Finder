@@ -1,4 +1,5 @@
 import os
+import uuid
 from typing import Optional
 from datetime import datetime
 from sqlmodel import SQLModel, Field, create_engine, Session
@@ -28,6 +29,14 @@ class Hackathon(SQLModel, table=True):
     travel_reimbursement: bool = False
     travel_details: Optional[str] = None
     last_checked: datetime = Field(default_factory=datetime.utcnow)
+
+
+class Subscriber(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    email: str = Field(unique=True)
+    confirmed: bool = False
+    token: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 def init_db():

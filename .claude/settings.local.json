@@ -2,7 +2,14 @@
   "permissions": {
     "allow": [
       "WebSearch",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(python:*)",
+      "Bash(gh api:*)",
+      "Bash(mkdir:*)",
+      "Bash(claude:*)",
+      "Bash(do:*)",
+      "Bash(docker run:*)",
+      "Bash(pg_ctl:*)"
     ]
   }
 }

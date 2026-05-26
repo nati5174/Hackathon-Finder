@@ -180,6 +180,11 @@ def run():
     yes_count = sum(1 for r in results if r.get("travel_reimbursement"))
     print(f"\n[scheduler] Done. {yes_count}/{len(results)} hackathons offer travel reimbursement.")
 
+    new_with_travel = [r for r in results if r.get("travel_reimbursement") and not r.get("skipped")]
+    if new_with_travel:
+        from backend.email_service import send_digest_to_all
+        send_digest_to_all(new_with_travel)
+
 
 def recheck_hackathon(hackathon_id: int) -> dict | None:
     """Re-scrape and re-classify a single hackathon by DB id, updating the record."""

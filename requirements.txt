@@ -8,3 +8,5 @@ sqlmodel
 python-dotenv
 apscheduler
 playwright
+resend
+pydantic[email]
