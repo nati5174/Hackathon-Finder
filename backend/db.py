@@ -28,6 +28,7 @@ class Hackathon(SQLModel, table=True):
     skip_reason: Optional[str] = None
     travel_reimbursement: bool = False
     travel_details: Optional[str] = None
+    format_type: str = "in_person"  # in_person | hybrid | digital
     last_checked: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -36,6 +37,8 @@ class Subscriber(SQLModel, table=True):
     email: str = Field(unique=True)
     confirmed: bool = False
     token: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    region: str = "all"  # all | us | intl
+    in_person_only: bool = False
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 

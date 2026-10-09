@@ -46,7 +46,10 @@ Does this hackathon offer ANY form of travel support for attendees? This include
 - Transportation subsidies or vouchers
 - Any financial help for getting to the event
 
-Be generous in interpretation — if travel support is mentioned even conditionally or for select participants, answer YES.
+Important rules:
+- Be generous in interpretation — if travel support is mentioned even conditionally or for select participants, answer YES.
+- If a dedicated travel page (e.g. /travel, /reimbursement, /logistics) exists but was blocked by Cloudflare or a security check and you could not read its content, answer YES — the existence of a travel-specific page strongly implies travel support is offered.
+- Only answer NO if you have actually read enough site content to be confident travel support is not mentioned anywhere.
 
 Answer in this exact format:
 VERDICT: YES or NO

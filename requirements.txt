@@ -4,6 +4,7 @@ beautifulsoup4
 anthropic
 fastapi
 uvicorn[standard]
+python-multipart
 sqlmodel
 python-dotenv
 apscheduler

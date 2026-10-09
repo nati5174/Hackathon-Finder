@@ -67,19 +67,31 @@ function HackathonCard({ h, highlight }) {
 
 function SubscribeForm() {
   const [email, setEmail] = useState("");
+  const [region, setRegion] = useState("all");
+  const [inPersonOnly, setInPersonOnly] = useState(false);
   const [status, setStatus] = useState(null); // null | "loading" | "success" | "error"
   const [message, setMessage] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setStatus("loading");
+    setMessage("");
     try {
       const res = await fetch("/api/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({
+          email,
+          region,
+          in_person_only: inPersonOnly,
+        }),
       });
       const data = await res.json();
+      if (!res.ok) {
+        setMessage(data.detail || "Something went wrong. Please try again.");
+        setStatus("error");
+        return;
+      }
       setMessage(data.message);
       setStatus("success");
       setEmail("");
@@ -92,6 +104,31 @@ function SubscribeForm() {
   return (
     <form className="subscribe-form" onSubmit={handleSubmit}>
       <p className="subscribe-label">Get notified of new hackathons</p>
+      <div className="subscribe-prefs">
+        <div className="subscribe-pref-group">
+          <span className="subscribe-pref-label">Region</span>
+          {["all", "us", "intl"].map((r) => (
+            <button
+              key={r}
+              type="button"
+              className={`pill pill-sm ${region === r ? "pill-active" : ""}`}
+              onClick={() => setRegion(r)}
+              disabled={status === "loading"}
+            >
+              {r === "all" ? "All" : r === "us" ? "US" : "Intl"}
+            </button>
+          ))}
+        </div>
+        <label className="subscribe-checkbox">
+          <input
+            type="checkbox"
+            checked={inPersonOnly}
+            onChange={(e) => setInPersonOnly(e.target.checked)}
+            disabled={status === "loading"}
+          />
+          In-person only
+        </label>
+      </div>
       <div className="subscribe-row">
         <input
           type="email"

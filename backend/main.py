@@ -1,14 +1,16 @@
 import os
-from fastapi import FastAPI, HTTPException
+from typing import Literal
+from fastapi import FastAPI, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from pydantic import BaseModel, EmailStr
 from sqlmodel import Session, select
 
 from backend.db import engine, init_db, Hackathon, Subscriber
 from backend.scheduler import recheck_hackathon
 from backend.email_service import send_confirmation_email
+from backend.filters import preference_summary
 
 app = FastAPI()
 
@@ -60,6 +62,13 @@ def get_stats():
 
 class SubscribeRequest(BaseModel):
     email: EmailStr
+    region: Literal["all", "us", "intl"] = "all"
+    in_person_only: bool = False
+
+
+def _apply_subscriber_prefs(sub: Subscriber, body: SubscribeRequest):
+    sub.region = body.region
+    sub.in_person_only = body.in_person_only
 
 
 @app.post("/api/subscribe")
@@ -71,14 +80,22 @@ def subscribe(body: SubscribeRequest):
         if existing:
             if existing.confirmed:
                 return {"message": "Already subscribed."}
-            # resend confirmation if not yet confirmed
-            send_confirmation_email(existing.email, existing.token)
+            _apply_subscriber_prefs(existing, body)
+            session.add(existing)
+            session.commit()
+            send_confirmation_email(
+                existing.email, existing.token, existing.region, existing.in_person_only
+            )
             return {"message": "Confirmation email resent."}
-        sub = Subscriber(email=body.email)
+        sub = Subscriber(
+            email=body.email,
+            region=body.region,
+            in_person_only=body.in_person_only,
+        )
         session.add(sub)
         session.commit()
         session.refresh(sub)
-        send_confirmation_email(sub.email, sub.token)
+        send_confirmation_email(sub.email, sub.token, sub.region, sub.in_person_only)
     return {"message": "Check your email to confirm your subscription."}
 
 
@@ -91,7 +108,67 @@ def confirm(token: str):
         sub.confirmed = True
         session.add(sub)
         session.commit()
-    return "<h2>You're confirmed! You'll get an email when new hackathons with travel reimbursement are posted.</h2>"
+        prefs = preference_summary(sub.region, sub.in_person_only)
+    return (
+        f"<h2>You're confirmed!</h2>"
+        f"<p>You'll get an email when new {prefs} hackathons with travel reimbursement are posted.</p>"
+        f"<p><a href=\"/api/preferences/{token}\">Update preferences</a></p>"
+    )
+
+
+@app.get("/api/preferences/{token}", response_class=HTMLResponse)
+def preferences_form(token: str, saved: int = 0):
+    with Session(engine) as session:
+        sub = session.exec(select(Subscriber).where(Subscriber.token == token)).first()
+        if not sub:
+            raise HTTPException(status_code=404, detail="Invalid token.")
+        region = sub.region
+        in_person_only = sub.in_person_only
+
+    checked = "checked" if in_person_only else ""
+    def selected(r): return "selected" if region == r else ""
+
+    return f"""
+    <html><body style="font-family:sans-serif;max-width:480px;margin:2rem auto;">
+    <h2>Alert preferences</h2>
+    {"<p style='color:#2e7d32;'>Preferences saved.</p>" if saved else ""}
+    <form method="post" action="/api/preferences/{token}">
+        <p>
+            <label>Region<br>
+            <select name="region">
+                <option value="all" {selected("all")}>All</option>
+                <option value="us" {selected("us")}>US</option>
+                <option value="intl" {selected("intl")}>International</option>
+            </select>
+            </label>
+        </p>
+        <p>
+            <label>
+                <input type="checkbox" name="in_person_only" value="true" {checked}>
+                In-person only (exclude hybrid)
+            </label>
+        </p>
+        <button type="submit">Save preferences</button>
+    </form>
+    </body></html>
+    """
+
+
+@app.post("/api/preferences/{token}")
+def preferences_update(
+    token: str,
+    region: Literal["all", "us", "intl"] = Form("all"),
+    in_person_only: str | None = Form(None),
+):
+    with Session(engine) as session:
+        sub = session.exec(select(Subscriber).where(Subscriber.token == token)).first()
+        if not sub:
+            raise HTTPException(status_code=404, detail="Invalid token.")
+        sub.region = region
+        sub.in_person_only = in_person_only == "true"
+        session.add(sub)
+        session.commit()
+    return RedirectResponse(url=f"/api/preferences/{token}?saved=1", status_code=303)
 
 
 @app.get("/api/unsubscribe/{token}", response_class=HTMLResponse)

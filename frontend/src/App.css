@@ -61,6 +61,47 @@ h1 {
   text-align: right;
 }
 
+.subscribe-prefs {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.subscribe-pref-group {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.subscribe-pref-label {
+  font-size: 0.7rem;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-right: 0.15rem;
+}
+
+.pill-sm {
+  padding: 0.2rem 0.55rem;
+  font-size: 0.72rem;
+}
+
+.subscribe-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: #888;
+  cursor: pointer;
+}
+
+.subscribe-checkbox input {
+  accent-color: #4caf50;
+}
+
 .subscribe-row {
   display: flex;
   gap: 0.5rem;

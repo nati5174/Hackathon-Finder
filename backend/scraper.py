@@ -21,11 +21,29 @@ TRAVEL_PATHS = [
     "/apply", "/application", "/register", "/sponsors", "/details",
 ]
 
+# Keywords used to identify travel-relevant links on the page
+TRAVEL_LINK_KEYWORDS = [
+    "travel", "reimburse", "logistics", "transport", "shuttle", "funding",
+    "stipend", "scholarship", "getting here", "getting-here", "bus", "flight",
+    "faq", "apply", "financial", "support", "aid", "grant",
+]
+
+
+def normalize_format_type(raw: str) -> str:
+    if not raw:
+        return "in_person"
+    normalized = raw.lower().replace("-", "_").replace(" ", "_")
+    if normalized in ("digital", "online"):
+        return "digital"
+    if normalized == "hybrid":
+        return "hybrid"
+    return "in_person"
+
 
 def get_mlh_hackathons() -> list[dict]:
     """
     Scrapes MLH events page and returns a list of dicts:
-    {name, hackathon_url, mlh_url, location, date_str}
+    {name, hackathon_url, mlh_url, location, date_str, format_type}
 
     MLH embeds event data as HTML-entity encoded JSON directly in the page HTML.
     Each event object has: name, websiteUrl, location, dateRange, formatType.
@@ -82,8 +100,9 @@ def get_mlh_hackathons() -> list[dict]:
             name = event.get("name", "").strip()
             if not website_url or not name:
                 continue
+            format_type = normalize_format_type(event.get("formatType", ""))
             # Skip digital/online-only events
-            if event.get("formatType") == "digital":
+            if format_type == "digital":
                 continue
             # Keep ended events — page is already season-scoped so all belong to 2026
 
@@ -94,6 +113,7 @@ def get_mlh_hackathons() -> list[dict]:
                 "mlh_url": f"https://www.mlh.com{mlh_event_path}",
                 "location": event.get("location", "Unknown"),
                 "date_str": event.get("dateRange", "Unknown"),
+                "format_type": format_type,
             })
         except Exception as e:
             print(f"[scraper] Error parsing event: {e}")
@@ -169,6 +189,40 @@ def _extract_internal_links(page, base: str) -> list[str]:
             seen.add(norm)
             links.append(href)
     return links
+
+
+def _travel_relevant_links(page, base: str) -> list[str]:
+    """
+    Scan all links on the current page and return those whose anchor text
+    or URL path contains travel-related keywords. These are inserted at the
+    front of the scrape queue so we never miss a hidden travel page.
+    """
+    from urllib.parse import urlparse, urldefrag
+    try:
+        items = page.eval_on_selector_all(
+            "a[href]",
+            "els => els.map(e => ({href: e.href, text: e.innerText.trim().toLowerCase()}))"
+        )
+    except Exception:
+        return []
+
+    seen, results = set(), []
+    for item in items:
+        href = item.get("href", "")
+        text = item.get("text", "")
+        href, _ = urldefrag(href)
+        parsed = urlparse(href)
+        if parsed.netloc != urlparse(base).netloc:
+            continue
+        if parsed.scheme not in ("http", "https"):
+            continue
+        combined = text + " " + parsed.path.lower()
+        if any(kw in combined for kw in TRAVEL_LINK_KEYWORDS):
+            norm = href.rstrip("/") or base
+            if norm not in seen:
+                seen.add(norm)
+                results.append(href)
+    return results
 
 
 def _text_from_html(html_content: str) -> str:
@@ -296,9 +350,9 @@ def _render_page(url: str, page) -> str:
 
         # If very little text came back, the page may be a heavy SPA still loading —
         # wait for network idle and try once more
-        if len(text) < 500:
+        if len(text) < 800:
             try:
-                page.wait_for_load_state("networkidle", timeout=4000)
+                page.wait_for_load_state("networkidle", timeout=5000)
                 text = _text_from_html(page.content())
             except Exception:
                 pass
@@ -344,11 +398,14 @@ def scrape_hackathon_site(url: str, browser=None, browser_page=None) -> str:
     visited = set()
 
     def _scrape_targets(page):
+        # Start with the homepage + fixed path candidates
         candidates = [url]
         for path in TRAVEL_PATHS:
             candidate = base + path
             if candidate not in candidates:
                 candidates.append(candidate)
+
+        homepage_scanned = False
 
         for target in candidates:
             norm = target.rstrip("/") or base
@@ -358,10 +415,24 @@ def scrape_hackathon_site(url: str, browser=None, browser_page=None) -> str:
 
             text = _render_page(target, page)
             if text:
-                path = urlparse(target).path or "/"
-                combined_text.append(f"[Page: {path}]\n{text[:10000]}")
+                path_label = urlparse(target).path or "/"
+                combined_text.append(f"[Page: {path_label}]\n{text[:10000]}")
 
-            if len(combined_text) >= 6:
+                # After loading the homepage, inject any travel-relevant links
+                # discovered on that page at the front of the remaining queue
+                if not homepage_scanned and target in (url, base, base + "/"):
+                    homepage_scanned = True
+                    discovered = _travel_relevant_links(page, base)
+                    # Insert discovered links right after current position
+                    # (deduplicated against already-queued candidates)
+                    existing = set(candidates)
+                    new_links = [l for l in discovered if l.rstrip("/") not in existing]
+                    if new_links:
+                        insert_at = candidates.index(target) + 1
+                        for i, link in enumerate(new_links):
+                            candidates.insert(insert_at + i, link)
+
+            if len(combined_text) >= 8:
                 break
 
     if browser_page is not None:

@@ -1,0 +1,50 @@
+[
+  {
+    "name": "LA Hacks",
+    "url": "https://lahacks.com/",
+    "travel_reimbursement": true,
+    "notes": "Historically offers travel reimbursement"
+  },
+  {
+    "name": "Hacktech",
+    "url": "https://hack.caltech.edu",
+    "travel_reimbursement": true,
+    "notes": "Confirmed travel support on site"
+  },
+  {
+    "name": "HackUPC",
+    "url": "https://hackupc.com",
+    "travel_reimbursement": true,
+    "notes": "International hackathon with travel grants"
+  },
+  {
+    "name": "YHack",
+    "url": "https://www.yhack.org/",
+    "travel_reimbursement": true,
+    "notes": "Yale hackathon with travel reimbursement"
+  },
+  {
+    "name": "Hack4Her",
+    "url": "https://www.hack4her.com/",
+    "travel_reimbursement": false,
+    "notes": "No travel support mentioned"
+  },
+  {
+    "name": "MasseyHacks",
+    "url": "https://masseyhacks.ca",
+    "travel_reimbursement": false,
+    "notes": "No travel support mentioned"
+  },
+  {
+    "name": "HackHCC",
+    "url": "https://hackhcc.org/",
+    "travel_reimbursement": false,
+    "notes": "No travel support mentioned"
+  },
+  {
+    "name": "Quackhacks 3",
+    "url": "https://www.quackhacks.org/",
+    "travel_reimbursement": false,
+    "notes": "No travel support mentioned"
+  }
+]

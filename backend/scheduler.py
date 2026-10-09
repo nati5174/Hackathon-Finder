@@ -24,16 +24,24 @@ WORKERS = 10
 RECHECK_DAYS = 7
 
 
-def _save_result(result: dict):
+def _save_result(result: dict) -> bool:
+    """Save result to DB. Returns True if subscribers should be alerted."""
+    should_alert = False
     try:
         with Session(engine) as session:
             existing = session.exec(
                 select(Hackathon).where(Hackathon.hackathon_url == result["hackathon_url"])
             ).first()
+            should_alert = (
+                result.get("travel_reimbursement")
+                and not result.get("skipped")
+                and (existing is None or not existing.travel_reimbursement)
+            )
             if existing:
                 existing.name = result["name"]
                 existing.location = result["location"]
                 existing.date_str = result["date_str"]
+                existing.format_type = result.get("format_type", "in_person")
                 existing.compliance_ok = result["compliance_ok"]
                 existing.compliance_notes = result["compliance_notes"]
                 existing.skipped = result["skipped"]
@@ -49,6 +57,7 @@ def _save_result(result: dict):
                     mlh_url=result["mlh_url"],
                     location=result["location"],
                     date_str=result["date_str"],
+                    format_type=result.get("format_type", "in_person"),
                     compliance_ok=result["compliance_ok"],
                     compliance_notes=result["compliance_notes"],
                     skipped=result["skipped"],
@@ -60,6 +69,8 @@ def _save_result(result: dict):
             session.commit()
     except Exception as db_err:
         print(f"[scheduler] DB error for {result['name']}: {db_err}")
+        return False
+    return should_alert
 
 
 def process_hackathon(h: dict, browser) -> dict:
@@ -102,7 +113,7 @@ def process_hackathon(h: dict, browser) -> dict:
             "travel_reimbursement": offers, "travel_details": details}
 
 
-def _worker(q: queue.Queue, results: list, lock: threading.Lock):
+def _worker(q: queue.Queue, results: list, alertable: list, lock: threading.Lock):
     """
     Worker thread: owns one Playwright browser for its lifetime.
     Pulls hackathons from the queue until empty.
@@ -121,7 +132,8 @@ def _worker(q: queue.Queue, results: list, lock: threading.Lock):
                     result = process_hackathon(h, browser)
                     with lock:
                         results.append(result)
-                        _save_result(result)
+                        if _save_result(result):
+                            alertable.append(result)
                 except Exception as e:
                     print(f"[scheduler] Worker error for {h['name']}: {e}")
                 finally:
@@ -158,9 +170,10 @@ def run():
         q.put(h)
 
     results = []
+    alertable = []
     lock = threading.Lock()
     threads = [
-        threading.Thread(target=_worker, args=(q, results, lock), daemon=True)
+        threading.Thread(target=_worker, args=(q, results, alertable, lock), daemon=True)
         for _ in range(n_workers)
     ]
     for t in threads:
@@ -180,10 +193,11 @@ def run():
     yes_count = sum(1 for r in results if r.get("travel_reimbursement"))
     print(f"\n[scheduler] Done. {yes_count}/{len(results)} hackathons offer travel reimbursement.")
 
-    new_with_travel = [r for r in results if r.get("travel_reimbursement") and not r.get("skipped")]
-    if new_with_travel:
+    if alertable:
         from backend.email_service import send_digest_to_all
-        send_digest_to_all(new_with_travel)
+        send_digest_to_all(alertable)
+    else:
+        print("[scheduler] No new travel-reimbursement alerts to send")
 
 
 def recheck_hackathon(hackathon_id: int) -> dict | None:
@@ -194,12 +208,14 @@ def recheck_hackathon(hackathon_id: int) -> dict | None:
         h = session.get(Hackathon, hackathon_id)
         if not h:
             return None
+        had_travel = h.travel_reimbursement
         h_dict = {
             "name": h.name,
             "hackathon_url": h.hackathon_url,
             "mlh_url": h.mlh_url,
             "location": h.location,
             "date_str": h.date_str,
+            "format_type": h.format_type,
         }
 
     with sync_playwright() as p:
@@ -209,7 +225,15 @@ def recheck_hackathon(hackathon_id: int) -> dict | None:
         finally:
             browser.close()
 
+    should_alert = (
+        result.get("travel_reimbursement")
+        and not result.get("skipped")
+        and not had_travel
+    )
     _save_result(result)
+    if should_alert:
+        from backend.email_service import send_digest_to_all
+        send_digest_to_all([result])
     print(f"[scheduler] Rechecked: {h_dict['name']} — travel={'YES' if result['travel_reimbursement'] else 'NO'}")
     return result
 
