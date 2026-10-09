@@ -46,6 +46,8 @@ function isUS(location) {
   return location.split(/[\s,]+/).some((part) => US_STATES.has(part));
 }
 
+const SOURCE_LABELS = { mlh: "MLH", luma: "Luma" };
+
 function HackathonCard({ h, highlight }) {
   return (
     <a
@@ -56,7 +58,14 @@ function HackathonCard({ h, highlight }) {
     >
       <div className="card-top">
         <h2>{h.name}</h2>
-        {highlight && <span className="badge">Travel covered</span>}
+        <div className="card-badges">
+          {highlight && <span className="badge">Travel covered</span>}
+          {h.source && (
+            <span className={`badge-source badge-source-${h.source}`}>
+              {SOURCE_LABELS[h.source] ?? h.source}
+            </span>
+          )}
+        </div>
       </div>
       <p className="location">{h.location}</p>
       <p className="date">{h.date_str}</p>
@@ -194,7 +203,7 @@ export default function App() {
         <div className="header-left">
           <h1>Hackathon Travel Finder</h1>
           <p className="subtitle">
-            Hackathons from MLH that cover your travel — fly for free.
+            Hackathons from MLH and Luma that cover your travel — fly for free.
           </p>
           {stats && (
             <p className="stats">
@@ -281,7 +290,7 @@ export default function App() {
 
           {!travelOnly && upcomingOther.length > 0 && (
             <section className="section-dim">
-              <h3 className="section-title dim">Upcoming — Other MLH Hackathons</h3>
+              <h3 className="section-title dim">Upcoming — Other Hackathons</h3>
               <div className="grid">
                 {upcomingOther.map((h) => (
                   <HackathonCard key={h.id} h={h} highlight={false} />

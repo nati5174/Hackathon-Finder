@@ -51,51 +51,72 @@ def _is_past(dt_str: str) -> bool:
 # Luma
 # ---------------------------------------------------------------------------
 
+def _get_all_city_slugs() -> list[str]:
+    """Fetch all available city slugs from the Luma discover page."""
+    try:
+        r = httpx.get("https://lu.ma/discover", headers=HEADERS, timeout=TIMEOUT, follow_redirects=True)
+        match = re.search(
+            r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>',
+            r.text, re.DOTALL
+        )
+        if match:
+            data = json.loads(match.group(1))
+            places = data["props"]["pageProps"]["initialData"]["places"]
+            return [p["place"]["slug"] for p in places]
+    except Exception as e:
+        print(f"[luma] Could not fetch city list: {e}")
+    # Fallback to a hardcoded list of major tech hubs
+    return [
+        "sf", "nyc", "toronto", "boston", "seattle", "london", "berlin",
+        "austin", "chicago", "la", "dc", "atlanta", "miami", "singapore",
+        "bangalore", "bengaluru", "mumbai", "tel-aviv", "paris", "amsterdam",
+    ]
+
+
 def get_luma_hackathons() -> list[dict]:
     """
     Fetches upcoming hackathon events from luma.com city pages.
 
-    Luma has no open search API. City pages (lu.ma/sf, lu.ma/nyc, etc.) redirect to
-    luma.com and embed up to 20 upcoming events per city in __NEXT_DATA__ JSON.
-    We fetch each city page with httpx, parse the JSON, and filter for hackathons.
+    Discovers all 80+ Luma city slugs dynamically from the discover page,
+    then fetches each city page (with pagination) and filters for hackathon events.
     """
-    CITY_SLUGS = [
-        "sf", "nyc", "toronto", "boston", "seattle",
-        "london", "berlin", "austin", "chicago", "la",
-    ]
-
+    city_slugs = _get_all_city_slugs()
     results = []
     seen: set[str] = set()
 
-    for slug in CITY_SLUGS:
-        try:
-            r = httpx.get(
-                f"https://lu.ma/{slug}",
-                headers=HEADERS,
-                timeout=TIMEOUT,
-                follow_redirects=True,
-            )
-            match = re.search(
-                r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>',
-                r.text, re.DOTALL
-            )
-            if not match:
-                continue
-            page_data = json.loads(match.group(1))
-            events = (
-                page_data.get("props", {})
-                .get("pageProps", {})
-                .get("initialData", {})
-                .get("data", {})
-                .get("events", [])
-            )
-            for entry in events:
-                _parse_luma_event(entry, results, seen)
-        except Exception as e:
-            print(f"[luma] Error loading {slug}: {e}")
+    for slug in city_slugs:
+        for page_num in range(1, 4):   # up to 3 pages × 20 events = 60 per city
+            try:
+                url = f"https://lu.ma/{slug}" + (f"?page={page_num}" if page_num > 1 else "")
+                r = httpx.get(url, headers=HEADERS, timeout=TIMEOUT, follow_redirects=True)
+                match = re.search(
+                    r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>',
+                    r.text, re.DOTALL
+                )
+                if not match:
+                    break
+                page_data = json.loads(match.group(1))
+                events = (
+                    page_data.get("props", {})
+                    .get("pageProps", {})
+                    .get("initialData", {})
+                    .get("data", {})
+                    .get("events", [])
+                )
+                if not events:
+                    break
+                before = len(results)
+                for entry in events:
+                    _parse_luma_event(entry, results, seen)
+                # If no new hackathons found on this page, skip remaining pages
+                if len(results) == before and page_num > 1:
+                    break
+            except Exception as e:
+                print(f"[luma] Error loading {slug} p{page_num}: {e}")
+                break
 
     results = [h for h in results if h["format_type"] != "digital"]
-    print(f"[luma] Found {len(results)} in-person/hybrid hackathons")
+    print(f"[luma] Found {len(results)} in-person/hybrid hackathons across {len(city_slugs)} cities")
     return results
 
 
