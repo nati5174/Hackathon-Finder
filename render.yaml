@@ -1,11 +1,10 @@
 services:
   - type: web
     name: hackathon-finder-api
-    env: python
+    env: docker
     region: oregon
     plan: free
-    buildCommand: pip install -r requirements.txt && playwright install chromium --with-deps
-    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    dockerfilePath: ./Dockerfile
     envVars:
       - key: ANTHROPIC_API_KEY
         sync: false
@@ -22,12 +21,12 @@ services:
 
   - type: cron
     name: hackathon-scheduler
-    env: python
+    env: docker
     region: oregon
     plan: free
     schedule: "0 8 * * *"
-    buildCommand: pip install -r requirements.txt && playwright install chromium --with-deps
-    startCommand: python -m backend.scheduler
+    dockerfilePath: ./Dockerfile
+    dockerCommand: python -m backend.scheduler
     envVars:
       - key: ANTHROPIC_API_KEY
         sync: false
