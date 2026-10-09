@@ -29,6 +29,7 @@ class Hackathon(SQLModel, table=True):
     travel_reimbursement: bool = False
     travel_details: Optional[str] = None
     format_type: str = "in_person"  # in_person | hybrid | digital
+    source: str = "mlh"             # mlh | luma
     last_checked: datetime = Field(default_factory=datetime.utcnow)
 
 

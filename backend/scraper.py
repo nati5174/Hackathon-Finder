@@ -114,6 +114,7 @@ def get_mlh_hackathons() -> list[dict]:
                 "location": event.get("location", "Unknown"),
                 "date_str": event.get("dateRange", "Unknown"),
                 "format_type": format_type,
+                "source": "mlh",
             })
         except Exception as e:
             print(f"[scraper] Error parsing event: {e}")

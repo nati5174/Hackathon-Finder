@@ -160,6 +160,7 @@ def _parse_luma_event(entry: dict, results: list, seen: set):
         "location": location,
         "date_str": _normalize_date(start_at),
         "format_type": format_type,
+        "source": "luma",
     })
 
 

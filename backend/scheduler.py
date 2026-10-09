@@ -17,7 +17,7 @@ from sqlmodel import Session, select
 
 from backend.db import engine, init_db, Hackathon
 from backend.scraper import get_mlh_hackathons, scrape_hackathon_site
-from backend.sources import get_luma_hackathons, get_eventbrite_hackathons
+from backend.sources import get_luma_hackathons
 from backend.compliance import is_scraping_allowed
 from backend.detector import detect_travel_reimbursement
 
@@ -49,6 +49,7 @@ def _save_result(result: dict) -> bool:
                 existing.skip_reason = result["skip_reason"]
                 existing.travel_reimbursement = result["travel_reimbursement"]
                 existing.travel_details = result["travel_details"]
+                existing.source = result.get("source", "mlh")
                 existing.last_checked = datetime.utcnow()
                 session.add(existing)
             else:
@@ -59,6 +60,7 @@ def _save_result(result: dict) -> bool:
                     location=result["location"],
                     date_str=result["date_str"],
                     format_type=result.get("format_type", "in_person"),
+                    source=result.get("source", "mlh"),
                     compliance_ok=result["compliance_ok"],
                     compliance_notes=result["compliance_notes"],
                     skipped=result["skipped"],
@@ -151,7 +153,7 @@ def run():
     all_hackathons: list[dict] = []
     seen_urls: set[str] = set()
 
-    for source_fn in (get_mlh_hackathons, get_luma_hackathons, get_eventbrite_hackathons):
+    for source_fn in (get_mlh_hackathons, get_luma_hackathons):
         try:
             for h in source_fn():
                 url = h.get("hackathon_url", "").rstrip("/")
