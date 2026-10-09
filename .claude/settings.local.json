@@ -9,7 +9,10 @@
       "Bash(claude:*)",
       "Bash(do:*)",
       "Bash(docker run:*)",
-      "Bash(pg_ctl:*)"
+      "Bash(pg_ctl:*)",
+      "Bash(pip show:*)",
+      "Bash(pg_isready:*)",
+      "Bash(playwright install:*)"
     ]
   }
 }
