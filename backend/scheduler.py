@@ -17,6 +17,7 @@ from sqlmodel import Session, select
 
 from backend.db import engine, init_db, Hackathon
 from backend.scraper import get_mlh_hackathons, scrape_hackathon_site
+from backend.sources import get_luma_hackathons, get_eventbrite_hackathons
 from backend.compliance import is_scraping_allowed
 from backend.detector import detect_travel_reimbursement
 
@@ -146,7 +147,23 @@ def run():
     print(f"[scheduler] Starting at {datetime.utcnow().isoformat()}")
     init_db()
 
-    hackathons = get_mlh_hackathons()
+    # Collect from all sources, deduplicate by hackathon_url
+    all_hackathons: list[dict] = []
+    seen_urls: set[str] = set()
+
+    for source_fn in (get_mlh_hackathons, get_luma_hackathons, get_eventbrite_hackathons):
+        try:
+            for h in source_fn():
+                url = h.get("hackathon_url", "").rstrip("/")
+                if url and url not in seen_urls:
+                    seen_urls.add(url)
+                    all_hackathons.append(h)
+        except Exception as e:
+            print(f"[scheduler] Source {source_fn.__name__} failed: {e}")
+
+    hackathons = all_hackathons
+    print(f"[scheduler] {len(hackathons)} unique hackathons across all sources")
+
     if not hackathons:
         print("[scheduler] No hackathons found — aborting")
         return
