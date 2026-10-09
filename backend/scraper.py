@@ -8,6 +8,7 @@ import html
 import json
 import time
 import httpx
+from datetime import datetime
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
@@ -40,6 +41,24 @@ def normalize_format_type(raw: str) -> str:
     return "in_person"
 
 
+_MLH_MONTHS = {"JAN":1,"FEB":2,"MAR":3,"APR":4,"MAY":5,"JUN":6,"JUL":7,"AUG":8,"SEP":9,"OCT":10,"NOV":11,"DEC":12}
+
+def _mlh_date_with_year(date_range: str, season: int) -> str:
+    """Append the correct calendar year to an MLH dateRange string.
+    In season S: Aug-Dec hackathons are in year S-1; Jan-Jul are in year S.
+    """
+    if not date_range or date_range == "Unknown":
+        return date_range
+    m = re.search(r'([A-Z]{3})', date_range.upper())
+    if not m:
+        return date_range
+    month = _MLH_MONTHS.get(m.group(1), 0)
+    if not month:
+        return date_range
+    year = season - 1 if month >= 8 else season
+    return f"{date_range}, {year}"
+
+
 def get_mlh_hackathons() -> list[dict]:
     """
     Scrapes MLH events page and returns a list of dicts:
@@ -48,7 +67,9 @@ def get_mlh_hackathons() -> list[dict]:
     MLH embeds event data as HTML-entity encoded JSON directly in the page HTML.
     Each event object has: name, websiteUrl, location, dateRange, formatType.
     """
-    season = os.getenv("MLH_SEASON", "2026")
+    _now = datetime.now()
+    _auto_season = _now.year + 1 if _now.month >= 8 else _now.year
+    season = int(os.getenv("MLH_SEASON") or _auto_season)
     mlh_url = f"https://www.mlh.com/seasons/{season}/events"
 
     try:
@@ -112,7 +133,7 @@ def get_mlh_hackathons() -> list[dict]:
                 "hackathon_url": website_url,
                 "mlh_url": f"https://www.mlh.com{mlh_event_path}",
                 "location": event.get("location", "Unknown"),
-                "date_str": event.get("dateRange", "Unknown"),
+                "date_str": _mlh_date_with_year(event.get("dateRange", "Unknown"), season),
                 "format_type": format_type,
                 "source": "mlh",
             })

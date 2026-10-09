@@ -8,6 +8,15 @@ function currentSeason() {
 }
 
 function parseDateNum(dateStr, season) {
+  // Prefer explicit year if present: "JAN 15, 2027" or "JAN 15 - 16, 2027"
+  const withYear = (dateStr || "").match(/([A-Z]+)\s+(\d+)[^,]*,\s*(\d{4})/);
+  if (withYear) {
+    const month = MONTHS[withYear[1]] || 0;
+    const day = parseInt(withYear[2]);
+    const year = parseInt(withYear[3]);
+    return year * 10000 + month * 100 + day;
+  }
+  // Fallback for old records without year
   const match = (dateStr || "").match(/([A-Z]+)\s+(\d+)/);
   if (!match) return 0;
   const month = MONTHS[match[1]] || 0;

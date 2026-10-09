@@ -11,6 +11,7 @@ Eventbrite: Uses their official API — requires EVENTBRITE_TOKEN env var (free)
 import os
 import json
 import re
+import time
 import httpx
 from datetime import datetime, timezone
 
@@ -28,7 +29,7 @@ def _normalize_date(dt_str: str) -> str:
         return "Unknown"
     try:
         dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
-        return dt.strftime("%b %d").upper()
+        return dt.strftime("%b %d, %Y").upper()
     except Exception:
         return dt_str[:10] if dt_str else "Unknown"
 
@@ -89,6 +90,10 @@ def get_luma_hackathons() -> list[dict]:
             try:
                 url = f"https://lu.ma/{slug}" + (f"?page={page_num}" if page_num > 1 else "")
                 r = httpx.get(url, headers=HEADERS, timeout=TIMEOUT, follow_redirects=True)
+                if r.status_code == 429:
+                    print(f"[luma] Rate limited on {slug}, waiting 10s...")
+                    time.sleep(10)
+                    r = httpx.get(url, headers=HEADERS, timeout=TIMEOUT, follow_redirects=True)
                 match = re.search(
                     r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>',
                     r.text, re.DOTALL
@@ -111,6 +116,7 @@ def get_luma_hackathons() -> list[dict]:
                 # If no new hackathons found on this page, skip remaining pages
                 if len(results) == before and page_num > 1:
                     break
+                time.sleep(0.5)  # 500ms between requests to avoid rate limiting
             except Exception as e:
                 print(f"[luma] Error loading {slug} p{page_num}: {e}")
                 break
