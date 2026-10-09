@@ -1,0 +1,5 @@
+{
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "https://hackathon-finder-1-0ek5.onrender.com/api/:path*" }
+  ]
+}
